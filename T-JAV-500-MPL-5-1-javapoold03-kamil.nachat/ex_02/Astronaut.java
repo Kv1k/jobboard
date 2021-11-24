@@ -19,8 +19,9 @@ public class Astronaut {
         return id;
     }
     Astronaut(String name){
-        System.out.println(name+" ready for launch!");
         this.name = name;
+        System.out.println(name+" ready for launch!");
+        
     }
     public static void main ( String [] args ) {
         Astronaut mutta = new Astronaut("Mutta") ;
