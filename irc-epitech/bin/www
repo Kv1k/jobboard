@@ -1,0 +1,194 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('irc-epitech:server');
+var http = require('http');
+var roomModel = require('../model/room');
+var msgModel = require('../model/message');
+var express = require('express');
+var connection = require("../model/connection");
+const mongoose = require('mongoose');
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+
+//socket connexion
+var io = require('socket.io')(server);
+
+var users =[];
+
+io.on('connection', function(socket){
+  console.log('user connected');
+  socket.on("add-user",(username)=>{
+    const user = {
+      username,
+    };
+    users.push(user);
+    io.emit("new-user", users);
+
+  })
+  
+  socket.on('create-room', function(roomName) {
+    socket.join(roomName);
+    io.emit(`user create the room : ${roomName}`);
+    createRoom(roomName);    
+  });
+
+  socket.on('join-room', function(roomName) {
+    socket.join(roomName);
+    io.emit(`user joined the room : ${roomName}`);
+    
+  });
+  
+  socket.on('delete-room', function(roomName) {
+    io.socketsLeave(roomName);
+    deleteRoom(roomName);    
+  });
+
+  socket.on('list', function() {
+    listRooms();    
+  });
+
+  socket.on('send-message', function(information) {
+    console.log(information);
+    io.emit('send-messageToAll', (information));
+    newMessage(information);
+  });
+  socket.on('quit',function(room){  
+    try{
+      console.log('[socket]','leave room :', room);
+      socket.leave(room);
+      socket.to(room).emit('user left', socket.id);
+    }catch(e){
+      console.log('[error]','leave room :', e);
+      socket.emit('error','couldnt perform requested action');
+    }
+  })
+});
+
+
+async function createRoom(roomName){
+  var searchRoom = await roomModel.findOne({
+    nameOfRoom: roomName,
+  })
+  
+  if(!searchRoom){
+    var newRoom = new roomModel({
+      nameOfRoom: roomName
+    });
+  
+    var newRoom = await newRoom.save();
+  }
+  
+  else{
+    io.emit(`room already exist`);
+  }
+  
+}
+
+async function deleteRoom(roomName){
+  var room = await roomModel.findOne(roomName)
+  
+  if(room){
+   room.remove().exec();
+   io.emit(`room is deleted`);
+  }
+
+  else{
+    io.emit(`error: room is not deleted`);
+  }
+}
+async function listRooms(){
+  var rooms= await roomModel.find()
+  io.emit(`list of rooms`, rooms);
+}
+async function newMessage(information){
+  var newMsg = new msgModel({
+    message: information,
+    roomId: socket.id,
+  });
+
+  var newMessage = await newMsg.save();
+}
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
