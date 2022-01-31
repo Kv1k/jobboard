@@ -1,6 +1,16 @@
-version: "3.9"
+version: '3'
 services:
 
   hello-world:
     build:
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: "Dockerfile"
+    ports:
+      - "8080"
+  
+  db:
+    image: "postgres:9.4"
+    ports:
+      - "5432"
+    environment:
+      - POSTGRES_PASSWORD=popeye
